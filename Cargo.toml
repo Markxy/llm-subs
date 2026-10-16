@@ -1,0 +1,110 @@
+[package]
+name = "llm-subs"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.95"
+description = "Watches your media folders and translates subtitles with an LLM"
+license = "MIT"
+repository = "https://github.com/Markxy/llm-subs"
+readme = "README.md"
+keywords = ["subtitles", "translation", "ffmpeg", "llm"]
+categories = ["multimedia"]
+
+[lib]
+name = "llm_subs"
+path = "src/lib.rs"
+
+[[bin]]
+name = "llm-subs"
+path = "src/main.rs"
+
+[features]
+default = ["tray"]
+# System tray icon. On Linux this pulls in GTK 3 and libayatana-appindicator;
+# build with `--no-default-features` on a machine without their dev packages.
+tray = ["dep:tray-icon", "dep:gtk"]
+
+[dependencies]
+# Desktop shell
+eframe = { version = "0.36", default-features = false, features = ["glow", "default_fonts", "wayland", "x11", "accesskit"] }
+# Same version eframe uses; only for window settings eframe does not get right across monitors.
+winit = { version = "0.30", default-features = false }
+tray-icon = { version = "0.25", optional = true }
+rfd = { version = "0.17", default-features = false, features = ["xdg-portal"] }
+auto-launch = "0.6"
+open = "5.4"
+notify-rust = "4.18"
+# Already built for eframe; writes the icon file Windows shows next to notifications.
+png = "0.18"
+
+# Async runtime and IO
+tokio = { version = "1.53", features = ["rt-multi-thread", "macros", "process", "sync", "time", "fs", "io-util", "net", "signal"] }
+tokio-util = "0.7"
+futures = "0.3"
+reqwest = { version = "0.13", default-features = false, features = ["json", "stream", "rustls-no-provider"] }
+# TLS with the pure-Rust `ring` provider: no C toolchain or NASM needed to build.
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12", "logging"] }
+# Hashing and randomness for the ChatGPT sign-in (PKCE); already built for TLS.
+ring = "0.17"
+url = "2.5"
+
+# File system watching
+notify = "8.2"
+notify-debouncer-full = "0.7"
+walkdir = "2.5"
+
+# Configuration and persistence
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+toml = "1.1"
+directories = "6.0"
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1.26", features = ["v4"] }
+
+# Archive handling for the managed FFmpeg download
+zip = { version = "8.6", default-features = false, features = ["deflate"] }
+tar = "0.4"
+lzma-rs = "0.3"
+tempfile = "3.27"
+
+# Diagnostics and CLI
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+tracing-appender = "0.2"
+clap = { version = "4.6", features = ["derive", "env"] }
+anyhow = "1.0"
+thiserror = "2.0"
+
+# Misc
+parking_lot = "0.12"
+base64 = "0.23"
+sys-locale = "0.3"
+chardetng = "1.0"
+# The encodings chardetng returns; this dependency enables their `decode`.
+encoding_rs = "0.8"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+gtk = { version = "0.18", optional = true }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = [
+    "Win32_System_Console", "Win32_Foundation", "Win32_Security_Cryptography",
+    "Win32_Storage_FileSystem", "Win32_System_IO", "Win32_System_Ioctl",
+    "Win32_System_Registry", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging",
+] }
+raw-window-handle = "0.6"
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+strip = true
+
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 2

@@ -1,0 +1,5 @@
+# cargo-release settings: `cargo release patch|minor|major --execute`
+# bumps the version, commits, tags `vX.Y.Z` and pushes, which triggers the Release workflow.
+allow-branch = ["main"]
+publish = false
+pre-release-commit-message = "Release v{{version}}"

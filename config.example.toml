@@ -1,0 +1,89 @@
+# LLM Subs configuration reference.
+# Copy the parts you need into your config.toml (`llm-subs config-path` prints where
+# it lives). Every key is optional; missing keys use the defaults shown here.
+
+[general]
+target_language = "de"          # ISO 639-1 code; see the language list in the app
+start_hidden = false            # launch straight into the tray
+close_to_tray = true            # closing the window keeps LLM Subs running
+max_concurrent_jobs = 1         # files translated at the same time
+log_level = "info"              # error | warn | info | debug | trace (file only)
+history_limit = 500             # finished jobs kept in jobs.json (file only)
+onboarding_complete = false     # set once the first-run guide is done; back to false opens it again
+
+[watch]
+enabled = true
+settle_seconds = 20             # a new file must stop changing for this long first (file only)
+# The extension lists are only set here, too.
+media_extensions = ["mkv", "mp4", "m4v", "mov", "avi", "webm", "ts", "m2ts", "mts", "mpg", "mpeg", "wmv", "flv", "ogv", "vob"]
+subtitle_extensions = ["srt", "vtt", "ass", "ssa"]
+
+[[watch.folders]]
+path = "D:/Media/Incoming"
+recursive = true
+process_existing = false        # also queue files that are already there
+
+[output]
+mode = "sidecar"                # sidecar -> Movie.de.srt next to the media | embed -> new track in the file
+keep_sidecar_when_embedding = false
+
+[ffmpeg]
+# path_override = "C:/Tools/ffmpeg/bin"   # folder with ffmpeg + ffprobe, or the ffmpeg executable
+
+# Providers are where a model runs. Reference them by name from [models.translation].
+[[providers]]
+name = "chatgpt"
+kind = "chatgpt"                          # your ChatGPT Plus/Pro plan; sign in from the app or `llm-subs chatgpt sign-in`
+                                          # always reached at api.openai.com; tokens live in chatgpt-auth.dat, never here
+
+[[providers]]
+name = "anthropic"
+kind = "anthropic"
+base_url = "https://api.anthropic.com"
+api_key = ""
+api_key_env = "ANTHROPIC_API_KEY"        # read from the environment; wins over api_key
+
+[[providers]]
+name = "openai"
+kind = "openai"
+base_url = "https://api.openai.com/v1"
+api_key_env = "OPENAI_API_KEY"
+
+[[providers]]
+name = "local"
+kind = "openai_compatible"                # Ollama, LM Studio, llama.cpp, vLLM, OpenRouter, Gemini's compatible endpoint
+base_url = "http://localhost:11434/v1"
+api_key = ""
+extra_headers = []                        # e.g. [["HTTP-Referer", "https://example.org"]] for OpenRouter
+
+[models.translation]
+provider = "anthropic"
+model = "claude-opus-5-5"                  # chatgpt providers default to gpt-6-luna
+effort = "medium"                          # anthropic: low | medium | high | xhigh | max
+                                           # openai, chatgpt: none | minimal | low | medium | high | xhigh (model dependent)
+# max_output_tokens = 64000                # not sent to chatgpt providers
+# temperature = 0.3                        # only sent when set; not sent to chatgpt providers
+
+# Price in US dollars per million tokens, for models without a built-in list price
+# or to override it. Without one, usage is counted but not priced.
+# [models.translation.pricing]
+# input_per_million = 4.0
+# cached_input_per_million = 0.4
+# output_per_million = 20.0
+
+[translation]
+extra_instructions = ""                    # your own preferences on top of the built-in ones (swearing, honorifics, ...)
+preferred_source_languages = []            # e.g. ["en", "ja"]; empty = the audio's language
+skip_if_target_exists = true               # false: translate anyway and replace an existing Movie.de.srt
+# Request tuning. A film goes out in batches of up to 100 lines, 8 at once;
+# a 1M-token model can take a whole film per request with 20000 lines and 1000000 characters.
+lines_per_request = 100                    # "Subtitle cues per request" under Setup
+max_chars_per_request = 10000              # file only; Setup raises it to 100 per cue when needed
+parallel_requests = 8                      # "Max parallel requests" under Setup (1-10 there)
+continuity_lines = 12                      # preceding lines shown with every batch (file only)
+request_timeout_seconds = 300              # give up when the provider sends nothing for this long
+max_retries = 2
+
+[translation.line_wrap]
+max_line_length = 42
+max_lines = 2                              # file only

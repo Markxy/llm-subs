@@ -1,0 +1,96 @@
+name: Release
+
+# Pushing a `vX.Y.Z` tag builds the binaries and publishes them as a GitHub release.
+# The tag must match the version in Cargo.toml: `cargo release patch|minor|major --execute`
+# bumps it, commits, tags and pushes in one go. Running this manually only builds.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  check-version:
+    name: Check version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Tag matches Cargo.toml
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          version=$(sed -n 's/^version = "\(.*\)"$/\1/p' Cargo.toml | head -n1)
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match Cargo.toml version $version"
+            exit 1
+          fi
+
+  build:
+    name: Build (${{ matrix.target }})
+    needs: check-version
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+          - os: macos-latest
+            target: aarch64-apple-darwin
+          - os: macos-latest
+            target: x86_64-apple-darwin
+          # Linux builds on 22.04 so the binaries need at most glibc 2.35
+          # (Debian 12, Raspberry Pi OS Bookworm, Ubuntu 22.04 and newer).
+          - os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+          - os: ubuntu-22.04-arm
+            target: aarch64-unknown-linux-gnu
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install tray dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libgtk-3-dev libayatana-appindicator3-dev libxdo-dev
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+      - run: cargo build --release --locked --target ${{ matrix.target }}
+      - name: Package
+        shell: bash
+        run: |
+          name="llm-subs-${{ matrix.target }}"
+          cd "target/${{ matrix.target }}/release"
+          if [ "$RUNNER_OS" = Windows ]; then
+            7z a "$GITHUB_WORKSPACE/$name.zip" llm-subs.exe
+          else
+            tar -czf "$GITHUB_WORKSPACE/$name.tar.gz" llm-subs
+          fi
+      - uses: actions/upload-artifact@v7
+        with:
+          name: llm-subs-${{ matrix.target }}
+          path: llm-subs-${{ matrix.target }}.*
+          if-no-files-found: error
+
+  release:
+    name: Publish release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: dist
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v3
+        with:
+          files: dist/*
+          generate_release_notes: true
