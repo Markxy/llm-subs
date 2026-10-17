@@ -43,6 +43,8 @@ pub fn run(runtime: Arc<AppRuntime>, start_hidden: bool) -> Result<()> {
             .with_inner_size([980.0, 680.0])
             .with_visible(!start_hidden)
             .with_icon(Arc::new(egui::IconData { rgba: window_icon.rgba, width: window_icon.width, height: window_icon.height })),
+        #[cfg(target_os = "linux")]
+        event_loop_builder: Some(Box::new(prefer_x11)),
         ..Default::default()
     };
     eframe::run_native(
@@ -51,6 +53,16 @@ pub fn run(runtime: Arc<AppRuntime>, start_hidden: bool) -> Result<()> {
         Box::new(move |creation_context| Ok(Box::new(LlmSubsApp::new(creation_context, runtime)))),
     )
     .map_err(|error| anyhow::anyhow!("window error: {error}"))
+}
+
+/// winit has no drag and drop on Wayland, so files can only be dropped on the window
+/// through XWayland. Without an X server the window stays on Wayland.
+#[cfg(target_os = "linux")]
+fn prefer_x11(event_loop: &mut winit::event_loop::EventLoopBuilder<eframe::UserEvent>) {
+    use winit::platform::x11::EventLoopBuilderExtX11;
+    if std::env::var_os("DISPLAY").is_some() {
+        event_loop.with_x11();
+    }
 }
 
 /// Saves the icon for the places that want an image file: Windows notifications and the

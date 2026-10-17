@@ -27,8 +27,9 @@ tray = ["dep:tray-icon", "dep:gtk"]
 [dependencies]
 # Desktop shell
 eframe = { version = "0.36", default-features = false, features = ["glow", "default_fonts", "wayland", "x11", "accesskit"] }
-# Same version eframe uses; only for window settings eframe does not get right across monitors.
-winit = { version = "0.30", default-features = false }
+# Same version eframe uses; for window settings eframe does not get right across monitors
+# and for choosing the X11 backend on Linux.
+winit = { version = "0.30", default-features = false, features = ["x11"] }
 tray-icon = { version = "0.25", optional = true }
 rfd = { version = "0.17", default-features = false, features = ["xdg-portal"] }
 auto-launch = "0.6"
