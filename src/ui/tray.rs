@@ -4,10 +4,10 @@
 use std::cell::Cell;
 use std::sync::mpsc;
 
-use eframe::egui;
 use tray_icon::menu::{CheckMenuItem, Menu, MenuEvent, MenuItem, PredefinedMenuItem};
 use tray_icon::{Icon, TrayIcon, TrayIconBuilder, TrayIconEvent};
 
+use super::background::Wakeup;
 use super::icon::IconImage;
 
 const OPEN_ID: &str = "llm-subs.open";
@@ -44,9 +44,10 @@ pub struct TrayController {
 }
 
 impl TrayController {
-    pub fn start(ctx: egui::Context, icon: IconImage) -> Option<Self> {
+    /// `wakeup` is woken whenever a command is waiting to be polled.
+    pub fn start(wakeup: Wakeup, icon: IconImage) -> Option<Self> {
         let (sender, receiver) = mpsc::channel();
-        install_event_handlers(ctx, sender);
+        install_event_handlers(wakeup, sender);
         let (tray, pause_items) = build_tray(icon)?;
         Some(Self { receiver, tray, pause_items, last_state: Cell::new(TrayState::default()) })
     }
@@ -77,9 +78,9 @@ fn tooltip(state: TrayState) -> String {
     }
 }
 
-fn install_event_handlers(ctx: egui::Context, sender: mpsc::Sender<TrayCommand>) {
+fn install_event_handlers(wakeup: Wakeup, sender: mpsc::Sender<TrayCommand>) {
     let menu_sender = sender.clone();
-    let menu_ctx = ctx.clone();
+    let menu_wakeup = wakeup.clone();
     MenuEvent::set_event_handler(Some(move |event: MenuEvent| {
         let command = match event.id().0.as_str() {
             OPEN_ID => TrayCommand::ShowWindow,
@@ -89,7 +90,7 @@ fn install_event_handlers(ctx: egui::Context, sender: mpsc::Sender<TrayCommand>)
             _ => return,
         };
         let _ = menu_sender.send(command);
-        menu_ctx.request_repaint();
+        menu_wakeup.wake();
     }));
     TrayIconEvent::set_event_handler(Some(move |event: TrayIconEvent| {
         let open = match event {
@@ -101,7 +102,7 @@ fn install_event_handlers(ctx: egui::Context, sender: mpsc::Sender<TrayCommand>)
         };
         if open {
             let _ = sender.send(TrayCommand::ShowWindow);
-            ctx.request_repaint();
+            wakeup.wake();
         }
     }));
 }

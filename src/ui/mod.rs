@@ -1,6 +1,7 @@
 //! Desktop window built with egui. The window is a thin client of [`AppRuntime`]: it
 //! edits a draft of the configuration, shows job records and forwards actions.
 
+mod background;
 mod file_dialog;
 mod icon;
 mod notifications;
@@ -12,7 +13,6 @@ mod widgets;
 
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -24,8 +24,8 @@ use crate::config::{Config, ProviderKind};
 use crate::jobs::{JobOptions, JobOrigin, JobRecord};
 use crate::platform::single_instance::ActivationRequests;
 
+use background::{Background, Request};
 use file_dialog::FileDialogs;
-use tray::{TrayCommand, TrayController, TrayState};
 use views::usage::UsagePeriod;
 use views::View;
 
@@ -33,9 +33,22 @@ const AUTOSAVE_DELAY: Duration = Duration::from_millis(700);
 const TOAST_LIFETIME: Duration = Duration::from_secs(4);
 /// Smallest window the layout still fits in, in points.
 const MIN_WINDOW_SIZE: (f64, f64) = (800.0, 520.0);
+/// On Linux the tray talks D-Bus from threads of its own, so a hidden start can leave the
+/// window unopened until it is asked for. Elsewhere the tray runs on the window's event
+/// loop, so the window opens and is hidden again straight away.
+const TRAY_RUNS_WITHOUT_WINDOW: bool = cfg!(target_os = "linux");
 
 pub fn run(runtime: Arc<AppRuntime>, start_hidden: bool, activations: ActivationRequests) -> Result<()> {
     register_app_icon(&runtime);
+    let mut background = None;
+    if start_hidden && TRAY_RUNS_WITHOUT_WINDOW {
+        let mut waiting = Background::start(runtime.clone(), activations.clone());
+        if waiting.has_tray() && waiting.wait_for_window() == Request::Quit {
+            return Ok(());
+        }
+        background = Some(waiting);
+    }
+    let hide_on_first_frame = start_hidden && background.is_none();
     let window_icon = icon::render(64);
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
@@ -50,7 +63,10 @@ pub fn run(runtime: Arc<AppRuntime>, start_hidden: bool, activations: Activation
     eframe::run_native(
         "LLM Subs",
         options,
-        Box::new(move |creation_context| Ok(Box::new(LlmSubsApp::new(creation_context, runtime, activations, start_hidden)))),
+        Box::new(move |creation_context| {
+            let background = background.unwrap_or_else(|| Background::start(runtime.clone(), activations));
+            Ok(Box::new(LlmSubsApp::new(creation_context, runtime, background, hide_on_first_frame)))
+        }),
     )
     .map_err(|error| anyhow::anyhow!("window error: {error}"))
 }
@@ -91,10 +107,9 @@ pub struct LlmSubsApp {
     last_edit: Option<Instant>,
     last_seen_config: Arc<Config>,
     jobs_cache: Vec<JobRecord>,
-    jobs_changed: Arc<AtomicBool>,
     selected_job: Option<String>,
     toasts: Vec<Toast>,
-    tray: Option<TrayController>,
+    background: Background,
     quitting: bool,
     provider_tests: HashMap<String, ProviderTest>,
     language_filter: String,
@@ -103,16 +118,13 @@ pub struct LlmSubsApp {
     usage_period: UsagePeriod,
     /// ChatGPT providers whose model list was fetched automatically already.
     requested_model_lists: HashSet<String>,
-    announcer: notifications::JobAnnouncer,
     /// The first-run guide, while it is open.
     onboarding: Option<onboarding::Onboarding>,
     file_dialogs: FileDialogs,
-    /// Requests from starting the app again to show this window.
-    activations: ActivationRequests,
 }
 
 impl LlmSubsApp {
-    fn new(creation_context: &eframe::CreationContext<'_>, runtime: Arc<AppRuntime>, activations: ActivationRequests, start_hidden: bool) -> Self {
+    fn new(creation_context: &eframe::CreationContext<'_>, runtime: Arc<AppRuntime>, background: Background, hide_on_first_frame: bool) -> Self {
         theme::apply(&creation_context.egui_ctx);
         // Set on winit directly: egui turns a minimum size into pixels once, for the monitor
         // the window opens on, which fights every move to a monitor with other scaling.
@@ -121,19 +133,8 @@ impl LlmSubsApp {
             crate::platform::follow_suggested_rect_on_scale_change(window);
         }
 
-        let jobs_changed = Arc::new(AtomicBool::new(true));
-        let notifier_ctx = creation_context.egui_ctx.clone();
-        let notifier_flag = jobs_changed.clone();
-        runtime.set_ui_notifier(Arc::new(move || {
-            notifier_flag.store(true, Ordering::Relaxed);
-            notifier_ctx.request_repaint();
-        }));
-
-        let activation_ctx = creation_context.egui_ctx.clone();
-        activations.set_waker(move || activation_ctx.request_repaint());
-
-        let tray = TrayController::start(creation_context.egui_ctx.clone(), icon::render(32));
-        if start_hidden && tray.is_some() {
+        background.attach_window(&creation_context.egui_ctx);
+        if hide_on_first_frame && background.has_tray() {
             // eframe shows the window once its first frame is painted; hiding it again in
             // that same frame leaves only the tray icon.
             creation_context.egui_ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
@@ -147,10 +148,9 @@ impl LlmSubsApp {
             draft_dirty: false,
             last_edit: None,
             jobs_cache: Vec::new(),
-            jobs_changed,
             selected_job: None,
             toasts: Vec::new(),
-            tray,
+            background,
             quitting: false,
             provider_tests: HashMap::new(),
             language_filter: String::new(),
@@ -158,10 +158,8 @@ impl LlmSubsApp {
             show_api_keys: false,
             usage_period: UsagePeriod::default(),
             requested_model_lists: HashSet::new(),
-            announcer: notifications::JobAnnouncer::default(),
             onboarding: None,
             file_dialogs: FileDialogs::default(),
-            activations,
         };
         if !app.draft.general.onboarding_complete {
             if app.runtime.validation_problems(&app.draft).is_empty() {
@@ -208,13 +206,17 @@ impl LlmSubsApp {
     }
 
     pub(crate) fn tray_available(&self) -> bool {
-        self.tray.is_some()
+        self.background.has_tray()
     }
 
-    fn refresh_jobs_if_needed(&mut self) {
-        if self.jobs_changed.swap(false, Ordering::Relaxed) {
-            self.jobs_cache = self.runtime.jobs().snapshot();
-            self.announcer.update(&self.jobs_cache);
+    fn handle_background(&mut self, ctx: &egui::Context) {
+        match self.background.update(&mut self.jobs_cache) {
+            Some(Request::ShowWindow) => show_window(ctx),
+            Some(Request::Quit) => {
+                self.quitting = true;
+                ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+            }
+            None => {}
         }
     }
 
@@ -250,37 +252,11 @@ impl LlmSubsApp {
         }
     }
 
-    fn handle_tray_commands(&mut self, ctx: &egui::Context) {
-        let Some(tray) = &self.tray else { return };
-        for command in tray.poll() {
-            match command {
-                TrayCommand::ShowWindow => show_window(ctx),
-                TrayCommand::TogglePauseWatching => {
-                    let paused = !self.runtime.is_watch_paused();
-                    self.runtime.set_watch_paused(paused);
-                }
-                TrayCommand::TogglePauseTranslations => {
-                    let jobs = self.runtime.jobs();
-                    jobs.set_paused(!jobs.is_paused());
-                }
-                TrayCommand::Quit => {
-                    self.quitting = true;
-                    ctx.send_viewport_cmd(egui::ViewportCommand::Close);
-                }
-            }
-        }
-        tray.set_state(TrayState {
-            watching_paused: self.runtime.is_watch_paused(),
-            translations_paused: self.runtime.jobs().is_paused(),
-            active_jobs: self.jobs_cache.iter().filter(|j| j.status.is_active()).count(),
-        });
-    }
-
     fn handle_close_request(&mut self, ctx: &egui::Context) {
         if !ctx.input(|input| input.viewport().close_requested()) || self.quitting {
             return;
         }
-        if self.draft.general.close_to_tray && self.tray.is_some() {
+        if self.draft.general.close_to_tray && self.background.has_tray() {
             ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
             ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
         }
@@ -434,12 +410,8 @@ impl eframe::App for LlmSubsApp {
     /// Runs before every frame and also while the window is hidden, so tray commands
     /// and job updates are handled even when nothing is drawn.
     fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        self.refresh_jobs_if_needed();
+        self.handle_background(ctx);
         self.sync_config_from_runtime();
-        self.handle_tray_commands(ctx);
-        if self.activations.take() {
-            show_window(ctx);
-        }
         if let Some((paths, on_choice)) = self.file_dialogs.take_choice() {
             on_choice(self, paths);
         }
