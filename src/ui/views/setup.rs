@@ -133,11 +133,11 @@ fn show_ffmpeg(app: &mut LlmSubsApp, ui: &mut Ui) {
                 app.draft.ffmpeg.path_override = (!text.trim().is_empty()).then(|| std::path::PathBuf::from(text.trim()));
                 app.mark_dirty();
             }
-            if ui.button("Browse…").clicked()
-                && let Some(folder) = widgets::pick_folder()
-            {
-                app.draft.ffmpeg.path_override = Some(folder);
-                app.mark_dirty();
+            if ui.button("Browse…").clicked() {
+                app.file_dialogs.pick_folder(|app, folder| {
+                    app.draft.ffmpeg.path_override = Some(folder);
+                    app.mark_dirty();
+                });
             }
         });
         ui.horizontal(|ui| {

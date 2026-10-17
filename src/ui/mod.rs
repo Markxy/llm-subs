@@ -1,6 +1,7 @@
 //! Desktop window built with egui. The window is a thin client of [`AppRuntime`]: it
 //! edits a draft of the configuration, shows job records and forwards actions.
 
+mod file_dialog;
 mod icon;
 mod notifications;
 mod onboarding;
@@ -22,6 +23,7 @@ use crate::app::{AppRuntime, ProviderTest};
 use crate::config::{Config, ProviderKind};
 use crate::jobs::{JobOptions, JobOrigin, JobRecord};
 
+use file_dialog::FileDialogs;
 use tray::{TrayCommand, TrayController, TrayState};
 use views::usage::UsagePeriod;
 use views::View;
@@ -92,6 +94,7 @@ pub struct LlmSubsApp {
     announcer: notifications::JobAnnouncer,
     /// The first-run guide, while it is open.
     onboarding: Option<onboarding::Onboarding>,
+    file_dialogs: FileDialogs,
 }
 
 impl LlmSubsApp {
@@ -135,6 +138,7 @@ impl LlmSubsApp {
             requested_model_lists: HashSet::new(),
             announcer: notifications::JobAnnouncer::default(),
             onboarding: None,
+            file_dialogs: FileDialogs::default(),
         };
         if !app.draft.general.onboarding_complete {
             if app.runtime.validation_problems(&app.draft).is_empty() {
@@ -410,6 +414,9 @@ impl eframe::App for LlmSubsApp {
         self.refresh_jobs_if_needed();
         self.sync_config_from_runtime();
         self.handle_tray_commands(ctx);
+        if let Some((paths, on_choice)) = self.file_dialogs.take_choice() {
+            on_choice(self, paths);
+        }
         self.autosave_if_due(ctx);
         if self.jobs_cache.iter().any(|j| j.status.is_active()) {
             ctx.request_repaint_after(Duration::from_millis(500));
@@ -419,7 +426,7 @@ impl eframe::App for LlmSubsApp {
         }
     }
 
-    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+    fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
         self.handle_dropped_files(&ctx);
         self.handle_close_request(&ctx);
@@ -449,6 +456,7 @@ impl eframe::App for LlmSubsApp {
             self.show_plan_notice(&ctx);
         }
         self.show_toasts(&ctx);
+        self.file_dialogs.open_requested(frame, &ctx, &self.runtime.tokio_handle());
     }
 }
 

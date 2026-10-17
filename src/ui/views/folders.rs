@@ -48,14 +48,14 @@ pub fn show(app: &mut LlmSubsApp, ui: &mut Ui) {
         app.mark_dirty();
     }
 
-    if ui.button("Add folder…").clicked()
-        && let Some(path) = widgets::pick_folder()
-    {
-        if app.draft.watch.folders.iter().any(|f| f.path == path) {
-            app.toast("That folder is already watched");
-        } else {
-            app.draft.watch.folders.push(WatchedFolder { path, ..WatchedFolder::default() });
-            app.mark_dirty();
-        }
+    if ui.button("Add folder…").clicked() {
+        app.file_dialogs.pick_folder(|app, path| {
+            if app.draft.watch.folders.iter().any(|f| f.path == path) {
+                app.toast("That folder is already watched");
+            } else {
+                app.draft.watch.folders.push(WatchedFolder { path, ..WatchedFolder::default() });
+                app.mark_dirty();
+            }
+        });
     }
 }

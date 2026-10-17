@@ -1,7 +1,5 @@
 //! Small reusable pieces shared by the views.
 
-use std::path::PathBuf;
-
 use eframe::egui::{self, Color32, RichText, Ui};
 
 use crate::config::{all_languages, find_language};
@@ -212,21 +210,6 @@ pub fn stat_tile(ui: &mut Ui, label: &str, value: &str, details: &str) {
             ui.label(RichText::new(line).small().color(palette.muted));
         }
     });
-}
-
-pub fn pick_folder() -> Option<PathBuf> {
-    rfd::FileDialog::new().set_title("Choose a folder").pick_folder()
-}
-
-pub fn pick_media_files(media_extensions: &[String], subtitle_extensions: &[String]) -> Vec<PathBuf> {
-    let media: Vec<&str> = media_extensions.iter().map(String::as_str).collect();
-    let subtitles: Vec<&str> = subtitle_extensions.iter().map(String::as_str).collect();
-    rfd::FileDialog::new()
-        .set_title("Choose media or subtitle files")
-        .add_filter("Media files", &media)
-        .add_filter("Subtitle files", &subtitles)
-        .pick_files()
-        .unwrap_or_default()
 }
 
 #[cfg(test)]

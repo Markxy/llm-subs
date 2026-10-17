@@ -13,15 +13,11 @@ pub fn show(app: &mut LlmSubsApp, ui: &mut Ui) {
     widgets::trailing_row(
         ui,
         |ui| {
-            if ui.button("Add folder…").clicked()
-                && let Some(folder) = widgets::pick_folder()
-            {
-                app.queue_paths(vec![folder], false);
+            if ui.button("Add folder…").clicked() {
+                app.file_dialogs.pick_folder(|app, folder| app.queue_paths(vec![folder], false));
             }
             if ui.button("Add files…").clicked() {
-                let watch = &app.draft.watch;
-                let files = widgets::pick_media_files(&watch.media_extensions, &watch.subtitle_extensions);
-                app.queue_paths(files, false);
+                app.file_dialogs.pick_media_files(&app.draft.watch, |app, files| app.queue_paths(files, false));
             }
             let watching_paused = app.runtime().is_watch_paused();
             if ui.selectable_label(watching_paused, if watching_paused { "Watching paused" } else { "Pause watching" }).clicked() {
