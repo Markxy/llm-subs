@@ -10,7 +10,7 @@ use crate::config::ConfigStore;
 use crate::ffmpeg::FfmpegTools;
 use crate::llm::LlmServices;
 
-use super::{run_pipeline, JobHandle, JobHistory, JobId, JobInput, JobOptions, JobOrigin, JobRecord, JobStage, JobStatus, LogLevel, PipelineContext, PipelineOutcome};
+use super::{run_pipeline, JobHandle, JobHistory, JobId, JobInput, JobOptions, JobOrigin, JobRecord, JobStage, JobStatus, LogLevel, PipelineContext, PipelineOutcome, WrittenFiles};
 
 pub struct QueueDependencies {
     pub config: ConfigStore,
@@ -34,6 +34,7 @@ pub struct JobQueue {
     wake: Notify,
     /// Cancelled when translations are paused, which sends running jobs back to the queue.
     pause_interrupt: Mutex<CancellationToken>,
+    written: WrittenFiles,
 }
 
 impl JobQueue {
@@ -45,6 +46,7 @@ impl JobQueue {
             deps,
             wake: Notify::new(),
             pause_interrupt: Mutex::new(CancellationToken::new()),
+            written: WrittenFiles::default(),
         });
         let scheduler = queue.clone();
         runtime.spawn(async move { scheduler.scheduler_loop().await });
@@ -97,6 +99,11 @@ impl JobQueue {
         let mut records: Vec<JobRecord> = self.state.lock().jobs.iter().map(|job| job.snapshot()).collect();
         records.extend(self.history.lock().records().iter().cloned());
         records
+    }
+
+    /// Subtitle and media files the jobs have written.
+    pub fn written_files(&self) -> &WrittenFiles {
+        &self.written
     }
 
     pub fn active_count(&self) -> usize {
@@ -186,6 +193,7 @@ impl JobQueue {
             config: self.deps.config.current(),
             tools: (self.deps.locate_tools)(),
             llm: self.deps.llm.clone(),
+            written: self.written.clone(),
         };
         let cancel = handle.cancel_token();
         let pause_interrupt = self.pause_interrupt.lock().clone();

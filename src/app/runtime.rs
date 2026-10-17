@@ -374,7 +374,14 @@ impl AppRuntime {
     fn start_folder_watching(self: &Arc<Self>) -> Result<()> {
         let (sender, mut receiver) = mpsc::unbounded_channel::<WatchEvent>();
         let notifier = self.notifier.clone();
-        let watcher = FolderWatcher::start(self.config.current().watch.clone(), self.tokio_handle(), sender, Arc::new(move || notifier.notify()))?;
+        let written = self.jobs.written_files().clone();
+        let watcher = FolderWatcher::start(
+            self.config.current().watch.clone(),
+            self.tokio_handle(),
+            sender,
+            Arc::new(move || notifier.notify()),
+            Arc::new(move |path: &Path| written.contains(path)),
+        )?;
         *self.watcher.lock() = Some(watcher);
 
         let runtime = self.clone();

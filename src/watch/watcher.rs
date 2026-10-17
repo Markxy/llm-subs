@@ -59,6 +59,7 @@ impl PendingState {
 
 type PendingFiles = Arc<Mutex<HashMap<PathBuf, PendingFile>>>;
 type ChangeListener = Arc<dyn Fn() + Send + Sync>;
+type PathFilter = Arc<dyn Fn(&Path) -> bool + Send + Sync>;
 
 /// Debounce window applied on top of the OS notifications before a file is checked.
 const DEBOUNCE: Duration = Duration::from_secs(2);
@@ -70,35 +71,35 @@ const UNFINISHED_RECHECK: Duration = Duration::from_secs(10);
 pub struct FolderWatcher {
     debouncer: Debouncer<notify::RecommendedWatcher, RecommendedCache>,
     watched: HashMap<PathBuf, bool>,
-    pending: PendingFiles,
-    on_change: ChangeListener,
-    watch_config: Arc<Mutex<WatchConfig>>,
-    runtime: tokio::runtime::Handle,
-    events: mpsc::UnboundedSender<WatchEvent>,
+    checks: SettleChecks,
 }
 
 impl FolderWatcher {
     /// Starts watching; settled files are delivered through `events`. `on_change` is
-    /// called whenever a file starts or stops waiting, or its state changes.
+    /// called whenever a file starts or stops waiting, or its state changes. Files for
+    /// which `is_own_output` is true were written by LLM Subs itself and are left alone.
     pub fn start(
         watch_config: WatchConfig,
         runtime: tokio::runtime::Handle,
         events: mpsc::UnboundedSender<WatchEvent>,
         on_change: ChangeListener,
+        is_own_output: PathFilter,
     ) -> Result<Self> {
-        let pending: PendingFiles = Arc::new(Mutex::new(HashMap::new()));
-        let shared_config = Arc::new(Mutex::new(watch_config.clone()));
+        let checks = SettleChecks {
+            config: Arc::new(Mutex::new(watch_config.clone())),
+            pending: Arc::new(Mutex::new(HashMap::new())),
+            on_change,
+            is_own_output,
+            runtime,
+            events,
+        };
         let handler = {
-            let pending = pending.clone();
-            let on_change = on_change.clone();
-            let config = shared_config.clone();
-            let runtime = runtime.clone();
-            let events = events.clone();
+            let checks = checks.clone();
             move |result: DebounceEventResult| match result {
                 Ok(debounced) => {
                     for event in debounced {
                         for path in candidate_paths(&event.event) {
-                            schedule_settle_check(path, &config, &pending, &on_change, &runtime, &events);
+                            checks.schedule(path);
                         }
                     }
                 }
@@ -110,14 +111,14 @@ impl FolderWatcher {
             }
         };
         let debouncer = new_debouncer(DEBOUNCE, None, handler).context("starting file watcher")?;
-        let mut watcher = Self { debouncer, watched: HashMap::new(), pending, on_change, watch_config: shared_config, runtime, events };
+        let mut watcher = Self { debouncer, watched: HashMap::new(), checks };
         watcher.apply(&watch_config);
         Ok(watcher)
     }
 
     /// Brings the set of watched folders in line with the configuration.
     pub fn apply(&mut self, config: &WatchConfig) {
-        *self.watch_config.lock() = config.clone();
+        *self.checks.config.lock() = config.clone();
         let wanted: HashMap<PathBuf, bool> = if config.enabled {
             config.folders.iter().filter(|f| !f.path.as_os_str().is_empty()).map(|f| (f.path.clone(), f.recursive)).collect()
         } else {
@@ -151,12 +152,12 @@ impl FolderWatcher {
 
     /// Queues a settle check for a path found by the initial scan.
     pub fn consider(&self, path: PathBuf) {
-        schedule_settle_check(path, &self.watch_config, &self.pending, &self.on_change, &self.runtime, &self.events);
+        self.checks.schedule(path);
     }
 
     /// Files that are still being checked, oldest first.
     pub fn pending(&self) -> Vec<PendingFile> {
-        let mut files: Vec<PendingFile> = self.pending.lock().values().cloned().collect();
+        let mut files: Vec<PendingFile> = self.checks.pending.lock().values().cloned().collect();
         files.sort_by(|a, b| a.since.cmp(&b.since).then_with(|| a.path.cmp(&b.path)));
         files
     }
@@ -172,53 +173,62 @@ fn candidate_paths(event: &notify::Event) -> Vec<PathBuf> {
     }
 }
 
-fn schedule_settle_check(
-    path: PathBuf,
-    config: &Arc<Mutex<WatchConfig>>,
-    pending: &PendingFiles,
-    on_change: &ChangeListener,
-    runtime: &tokio::runtime::Handle,
-    events: &mpsc::UnboundedSender<WatchEvent>,
-) {
-    let (kind, settle_seconds) = {
-        let config = config.lock();
-        if crate::media::kinds::looks_like_incomplete_file(&path) {
-            return;
-        }
-        let Some(kind) = classify_path(&path, &config) else { return };
-        (kind, config.settle_seconds.max(1))
-    };
-    {
-        let mut pending = pending.lock();
-        if pending.contains_key(&path) {
-            return;
-        }
-        pending.insert(path.clone(), PendingFile { path: path.clone(), since: Utc::now(), size: 0, state: PendingState::Checking });
-    }
-    on_change();
-    let pending = pending.clone();
-    let on_change = on_change.clone();
-    let events = events.clone();
-    runtime.spawn(async move {
-        let report = |state: PendingState, size: u64| {
-            let changed = match pending.lock().get_mut(&path) {
-                Some(file) => {
-                    file.size = size;
-                    std::mem::replace(&mut file.state, state) != state
-                }
-                None => false,
-            };
-            if changed {
-                on_change();
+/// What the change handler and the watcher share to check new files until they settle.
+#[derive(Clone)]
+struct SettleChecks {
+    config: Arc<Mutex<WatchConfig>>,
+    pending: PendingFiles,
+    on_change: ChangeListener,
+    is_own_output: PathFilter,
+    runtime: tokio::runtime::Handle,
+    events: mpsc::UnboundedSender<WatchEvent>,
+}
+
+impl SettleChecks {
+    fn schedule(&self, path: PathBuf) {
+        let (kind, settle_seconds) = {
+            let config = self.config.lock();
+            if crate::media::kinds::looks_like_incomplete_file(&path) {
+                return;
             }
+            let Some(kind) = classify_path(&path, &config) else { return };
+            (kind, config.settle_seconds.max(1))
         };
-        let settled = wait_until_settled(&path, Duration::from_secs(settle_seconds), &report).await;
-        pending.lock().remove(&path);
-        on_change();
-        if settled {
-            let _ = events.send(WatchEvent { path, kind });
+        if (self.is_own_output)(&path) {
+            return;
         }
-    });
+        {
+            let mut pending = self.pending.lock();
+            if pending.contains_key(&path) {
+                return;
+            }
+            pending.insert(path.clone(), PendingFile { path: path.clone(), since: Utc::now(), size: 0, state: PendingState::Checking });
+        }
+        (self.on_change)();
+        let pending = self.pending.clone();
+        let on_change = self.on_change.clone();
+        let events = self.events.clone();
+        self.runtime.spawn(async move {
+            let report = |state: PendingState, size: u64| {
+                let changed = match pending.lock().get_mut(&path) {
+                    Some(file) => {
+                        file.size = size;
+                        std::mem::replace(&mut file.state, state) != state
+                    }
+                    None => false,
+                };
+                if changed {
+                    on_change();
+                }
+            };
+            let settled = wait_until_settled(&path, Duration::from_secs(settle_seconds), &report).await;
+            pending.lock().remove(&path);
+            on_change();
+            if settled {
+                let _ = events.send(WatchEvent { path, kind });
+            }
+        });
+    }
 }
 
 /// True once the file exists, its size and modification time have not changed for

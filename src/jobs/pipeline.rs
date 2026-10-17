@@ -14,12 +14,13 @@ use crate::subtitles::{parse_srt, serialize_srt, Cue};
 use crate::translation::{assemble_translated_cues, build_units, system_prompt, PromptContext, Translator};
 
 use super::job::FileFingerprint;
-use super::{JobHandle, JobInput, JobStage};
+use super::{JobHandle, JobInput, JobStage, WrittenFiles};
 
 pub struct PipelineContext {
     pub config: Arc<Config>,
     pub tools: Option<FfmpegTools>,
     pub llm: LlmServices,
+    pub written: WrittenFiles,
 }
 
 #[derive(Debug)]
@@ -108,6 +109,7 @@ pub async fn run_pipeline(job: &JobHandle, ctx: &PipelineContext) -> Result<Pipe
     let (translated, report) = assemble_translated_cues(&cues, &units, &outcome.translations, &config.translation.line_wrap);
     let srt_text = serialize_srt(&translated);
     write_text_file(&prepared.output_path, &srt_text)?;
+    ctx.written.record(&prepared.output_path);
     job.info(format!("Wrote {}", prepared.output_path.display()));
 
     let mut final_output = prepared.output_path.clone();
@@ -119,7 +121,9 @@ pub async fn run_pipeline(job: &JobHandle, ctx: &PipelineContext) -> Result<Pipe
         let title = format!("{} (LLM Subs)", target.english_name);
         embed_subtitle_track(tools, media_path, info, &prepared.output_path, target, &title, &cancel).await?;
         job.info("Subtitle track embedded");
-        // The rewritten file looks new to a folder watcher; this run already covers it.
+        // The rewritten file looks new to the folder watcher and to later scans of the
+        // folder; this run already covers it.
+        ctx.written.record(media_path);
         let fingerprint = FileFingerprint::of(media_path);
         job.update(|record| record.input_fingerprint = fingerprint);
         if !config.output.keep_sidecar_when_embedding {
