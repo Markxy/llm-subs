@@ -42,7 +42,6 @@ pub fn run(runtime: Arc<AppRuntime>, start_hidden: bool, activations: Activation
             .with_title("LLM Subs")
             .with_app_id(crate::platform::APP_ID)
             .with_inner_size([980.0, 680.0])
-            .with_visible(!start_hidden)
             .with_icon(Arc::new(egui::IconData { rgba: window_icon.rgba, width: window_icon.width, height: window_icon.height })),
         #[cfg(target_os = "linux")]
         event_loop_builder: Some(Box::new(prefer_x11)),
@@ -51,7 +50,7 @@ pub fn run(runtime: Arc<AppRuntime>, start_hidden: bool, activations: Activation
     eframe::run_native(
         "LLM Subs",
         options,
-        Box::new(move |creation_context| Ok(Box::new(LlmSubsApp::new(creation_context, runtime, activations)))),
+        Box::new(move |creation_context| Ok(Box::new(LlmSubsApp::new(creation_context, runtime, activations, start_hidden)))),
     )
     .map_err(|error| anyhow::anyhow!("window error: {error}"))
 }
@@ -113,7 +112,7 @@ pub struct LlmSubsApp {
 }
 
 impl LlmSubsApp {
-    fn new(creation_context: &eframe::CreationContext<'_>, runtime: Arc<AppRuntime>, activations: ActivationRequests) -> Self {
+    fn new(creation_context: &eframe::CreationContext<'_>, runtime: Arc<AppRuntime>, activations: ActivationRequests, start_hidden: bool) -> Self {
         theme::apply(&creation_context.egui_ctx);
         // Set on winit directly: egui turns a minimum size into pixels once, for the monitor
         // the window opens on, which fights every move to a monitor with other scaling.
@@ -134,6 +133,11 @@ impl LlmSubsApp {
         activations.set_waker(move || activation_ctx.request_repaint());
 
         let tray = TrayController::start(creation_context.egui_ctx.clone(), icon::render(32));
+        if start_hidden && tray.is_some() {
+            // eframe shows the window once its first frame is painted; hiding it again in
+            // that same frame leaves only the tray icon.
+            creation_context.egui_ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
+        }
         let config = runtime.config();
         let mut app = Self {
             draft: (*config).clone(),
