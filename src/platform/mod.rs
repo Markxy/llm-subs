@@ -5,6 +5,7 @@ mod console;
 #[cfg(target_os = "linux")]
 mod desktop_entry;
 pub mod notifications;
+pub mod single_instance;
 mod window_scaling;
 
 pub use autostart::{is_run_on_startup_enabled, set_run_on_startup, HIDDEN_START_FLAG};

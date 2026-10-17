@@ -22,6 +22,7 @@ use eframe::egui;
 use crate::app::{AppRuntime, ProviderTest};
 use crate::config::{Config, ProviderKind};
 use crate::jobs::{JobOptions, JobOrigin, JobRecord};
+use crate::platform::single_instance::ActivationRequests;
 
 use file_dialog::FileDialogs;
 use tray::{TrayCommand, TrayController, TrayState};
@@ -33,7 +34,7 @@ const TOAST_LIFETIME: Duration = Duration::from_secs(4);
 /// Smallest window the layout still fits in, in points.
 const MIN_WINDOW_SIZE: (f64, f64) = (800.0, 520.0);
 
-pub fn run(runtime: Arc<AppRuntime>, start_hidden: bool) -> Result<()> {
+pub fn run(runtime: Arc<AppRuntime>, start_hidden: bool, activations: ActivationRequests) -> Result<()> {
     register_app_icon(&runtime);
     let window_icon = icon::render(64);
     let options = eframe::NativeOptions {
@@ -50,7 +51,7 @@ pub fn run(runtime: Arc<AppRuntime>, start_hidden: bool) -> Result<()> {
     eframe::run_native(
         "LLM Subs",
         options,
-        Box::new(move |creation_context| Ok(Box::new(LlmSubsApp::new(creation_context, runtime)))),
+        Box::new(move |creation_context| Ok(Box::new(LlmSubsApp::new(creation_context, runtime, activations)))),
     )
     .map_err(|error| anyhow::anyhow!("window error: {error}"))
 }
@@ -107,10 +108,12 @@ pub struct LlmSubsApp {
     /// The first-run guide, while it is open.
     onboarding: Option<onboarding::Onboarding>,
     file_dialogs: FileDialogs,
+    /// Requests from starting the app again to show this window.
+    activations: ActivationRequests,
 }
 
 impl LlmSubsApp {
-    fn new(creation_context: &eframe::CreationContext<'_>, runtime: Arc<AppRuntime>) -> Self {
+    fn new(creation_context: &eframe::CreationContext<'_>, runtime: Arc<AppRuntime>, activations: ActivationRequests) -> Self {
         theme::apply(&creation_context.egui_ctx);
         // Set on winit directly: egui turns a minimum size into pixels once, for the monitor
         // the window opens on, which fights every move to a monitor with other scaling.
@@ -126,6 +129,9 @@ impl LlmSubsApp {
             notifier_flag.store(true, Ordering::Relaxed);
             notifier_ctx.request_repaint();
         }));
+
+        let activation_ctx = creation_context.egui_ctx.clone();
+        activations.set_waker(move || activation_ctx.request_repaint());
 
         let tray = TrayController::start(creation_context.egui_ctx.clone(), icon::render(32));
         let config = runtime.config();
@@ -151,6 +157,7 @@ impl LlmSubsApp {
             announcer: notifications::JobAnnouncer::default(),
             onboarding: None,
             file_dialogs: FileDialogs::default(),
+            activations,
         };
         if !app.draft.general.onboarding_complete {
             if app.runtime.validation_problems(&app.draft).is_empty() {
@@ -426,6 +433,9 @@ impl eframe::App for LlmSubsApp {
         self.refresh_jobs_if_needed();
         self.sync_config_from_runtime();
         self.handle_tray_commands(ctx);
+        if self.activations.take() {
+            show_window(ctx);
+        }
         if let Some((paths, on_choice)) = self.file_dialogs.take_choice() {
             on_choice(self, paths);
         }

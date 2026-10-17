@@ -1,14 +1,16 @@
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
 
+use std::path::Path;
 use std::process::ExitCode;
 use std::sync::Arc;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use clap::Parser;
 
 use llm_subs::app::{AppRuntime, StartOptions};
 use llm_subs::cli::{Cli, Command};
 use llm_subs::paths::AppPaths;
+use llm_subs::platform::single_instance::{self, ActivationRequests, InstanceLock};
 
 fn main() -> ExitCode {
     match run() {
@@ -45,9 +47,16 @@ fn run() -> Result<ExitCode> {
 
     match cli.command {
         None => {
+            let Some(instance) = lock_data_dir(&paths)? else {
+                return show_running_instance(paths.data_dir());
+            };
             let runtime = AppRuntime::start(paths, StartOptions { enable_watching: true })?;
+            let activations = instance.listen_for_activation(&runtime.tokio_handle()).unwrap_or_else(|error| {
+                tracing::warn!(%error, "starting the app again cannot bring up this window");
+                ActivationRequests::default()
+            });
             let start_hidden = cli.hidden || runtime.config().general.start_hidden;
-            llm_subs::ui::run(runtime, start_hidden)?;
+            llm_subs::ui::run(runtime, start_hidden, activations)?;
             Ok(ExitCode::SUCCESS)
         }
         Some(Command::Translate { paths: inputs, force }) => {
@@ -56,6 +65,7 @@ fn run() -> Result<ExitCode> {
             block_on(&runtime, llm_subs::cli::run_translate(runtime.clone(), inputs, force))
         }
         Some(Command::Watch) => {
+            let _instance = lock_data_dir(&paths)?.with_context(|| already_running(paths.data_dir()))?;
             let runtime = AppRuntime::start(paths, StartOptions { enable_watching: true })?;
             block_on(&runtime, llm_subs::cli::run_watch(runtime.clone()))
         }
@@ -77,6 +87,21 @@ fn run() -> Result<ExitCode> {
             Ok(llm_subs::cli::run_usage(&runtime, days))
         }
     }
+}
+
+/// The window and `watch` both watch the folders, so only one of them runs per data directory.
+fn lock_data_dir(paths: &AppPaths) -> Result<Option<InstanceLock>> {
+    InstanceLock::acquire(paths.data_dir()).with_context(|| format!("locking {}", paths.data_dir().display()))
+}
+
+fn show_running_instance(data_dir: &Path) -> Result<ExitCode> {
+    single_instance::request_activation(data_dir).with_context(|| format!("{}, but it did not respond", already_running(data_dir)))?;
+    tracing::info!("already running; asked the running instance to show its window");
+    Ok(ExitCode::SUCCESS)
+}
+
+fn already_running(data_dir: &Path) -> String {
+    format!("LLM Subs is already running with {}", data_dir.display())
 }
 
 fn block_on(runtime: &Arc<AppRuntime>, future: impl std::future::Future<Output = Result<ExitCode>>) -> Result<ExitCode> {

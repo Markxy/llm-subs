@@ -49,7 +49,8 @@ fn entry_text(executable: &str, icon_png: &str) -> String {
          Terminal=false\n\
          Categories=AudioVideo;Video;\n\
          Keywords=subtitles;translation;translate;srt;\n\
-         StartupWMClass={APP_ID}\n",
+         StartupWMClass={APP_ID}\n\
+         SingleMainWindow=true\n",
         comment = env!("CARGO_PKG_DESCRIPTION"),
         exec = escape_string(&quote_exec_argument(executable)),
         icon = escape_string(icon_png),
