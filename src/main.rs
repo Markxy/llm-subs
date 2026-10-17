@@ -55,8 +55,7 @@ fn run() -> Result<ExitCode> {
                 tracing::warn!(%error, "starting the app again cannot bring up this window");
                 ActivationRequests::default()
             });
-            let start_hidden = cli.hidden || runtime.config().general.start_hidden;
-            llm_subs::ui::run(runtime, start_hidden, activations)?;
+            llm_subs::ui::run(runtime, cli.hidden, activations)?;
             Ok(ExitCode::SUCCESS)
         }
         Some(Command::Translate { paths: inputs, force }) => {

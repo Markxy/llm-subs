@@ -19,8 +19,6 @@ pub struct Config {
 pub struct GeneralConfig {
     /// ISO 639-1 code of the language subtitles are translated into.
     pub target_language: String,
-    /// Start with the window hidden (only the tray icon is visible).
-    pub start_hidden: bool,
     /// Closing the window hides it to the tray instead of quitting.
     pub close_to_tray: bool,
     pub max_concurrent_jobs: usize,
@@ -37,7 +35,6 @@ impl Default for GeneralConfig {
     fn default() -> Self {
         Self {
             target_language: super::system_language_code(),
-            start_hidden: false,
             close_to_tray: true,
             max_concurrent_jobs: 1,
             log_level: "info".to_string(),

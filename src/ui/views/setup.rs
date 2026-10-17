@@ -19,9 +19,6 @@ pub fn show(app: &mut LlmSubsApp, ui: &mut Ui) {
         }
         widgets::hint(ui, "Starts hidden in the tray, so watched folders are handled without a window in the way.");
         let tray_available = app.tray_available();
-        if ui.add_enabled(tray_available, egui::Checkbox::new(&mut app.draft.general.start_hidden, "Start hidden when launched manually")).changed() {
-            app.mark_dirty();
-        }
         if ui.add_enabled(tray_available, egui::Checkbox::new(&mut app.draft.general.close_to_tray, "Closing the window keeps LLM Subs running in the tray")).changed() {
             app.mark_dirty();
         }

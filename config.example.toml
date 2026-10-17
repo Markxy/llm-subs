@@ -4,7 +4,6 @@
 
 [general]
 target_language = "de"          # ISO 639-1 code; see the language list in the app
-start_hidden = false            # launch straight into the tray
 close_to_tray = true            # closing the window keeps LLM Subs running
 max_concurrent_jobs = 1         # files translated at the same time
 log_level = "info"              # error | warn | info | debug | trace (file only)

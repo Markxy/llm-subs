@@ -125,6 +125,12 @@ mod tests {
     }
 
     #[test]
+    fn keys_from_older_versions_are_ignored() {
+        let parsed: Config = toml::from_str("[general]\nstart_hidden = true\ntarget_language = \"fi\"\n").unwrap();
+        assert_eq!(parsed.general.target_language, "fi");
+    }
+
+    #[test]
     fn partial_file_uses_defaults_for_missing_keys() {
         let parsed: Config = toml::from_str("[general]\ntarget_language = \"fi\"\n").unwrap();
         assert_eq!(parsed.general.target_language, "fi");
