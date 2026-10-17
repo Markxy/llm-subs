@@ -47,6 +47,8 @@ bill, translating subtitles for personal use costs very little.
 
 Download the archive for your system from
 [Releases](https://github.com/Markxy/llm-subs/releases/latest) and run `llm-subs`.
+On Linux it adds itself to your applications when it starts, so it shows up in the app
+grid and gets its icon in the dock.
 
 To build it yourself, use Rust 1.95 or newer:
 

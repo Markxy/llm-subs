@@ -32,11 +32,12 @@ const TOAST_LIFETIME: Duration = Duration::from_secs(4);
 const MIN_WINDOW_SIZE: (f64, f64) = (800.0, 520.0);
 
 pub fn run(runtime: Arc<AppRuntime>, start_hidden: bool) -> Result<()> {
+    register_app_icon(&runtime);
     let window_icon = icon::render(64);
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_title("LLM Subs")
-            .with_app_id("llm-subs")
+            .with_app_id(crate::platform::APP_ID)
             .with_inner_size([980.0, 680.0])
             .with_visible(!start_hidden)
             .with_icon(Arc::new(egui::IconData { rgba: window_icon.rgba, width: window_icon.width, height: window_icon.height })),
@@ -48,6 +49,19 @@ pub fn run(runtime: Arc<AppRuntime>, start_hidden: bool) -> Result<()> {
         Box::new(move |creation_context| Ok(Box::new(LlmSubsApp::new(creation_context, runtime)))),
     )
     .map_err(|error| anyhow::anyhow!("window error: {error}"))
+}
+
+/// Saves the icon for the places that want an image file: Windows notifications and the
+/// Linux desktop entry. Done before the window opens so the desktop can match it at once.
+fn register_app_icon(runtime: &AppRuntime) {
+    let path = runtime.paths().data_dir().join("icon.png");
+    match icon::write_png(&icon::render(256), &path) {
+        Ok(()) => {
+            crate::platform::notifications::register(&path);
+            crate::platform::install_desktop_entry(&path);
+        }
+        Err(error) => tracing::warn!(error = %format!("{error:#}"), "could not write the app icon"),
+    }
 }
 
 struct Toast {
@@ -99,11 +113,6 @@ impl LlmSubsApp {
         }));
 
         let tray = TrayController::start(creation_context.egui_ctx.clone(), icon::render(32));
-        let notification_icon = runtime.paths().data_dir().join("icon.png");
-        match icon::write_png(&icon::render(128), &notification_icon) {
-            Ok(()) => crate::platform::notifications::register(&notification_icon),
-            Err(error) => tracing::warn!(error = %format!("{error:#}"), "could not write the notification icon"),
-        }
         let config = runtime.config();
         let mut app = Self {
             draft: (*config).clone(),
