@@ -18,19 +18,15 @@ path = "src/lib.rs"
 name = "llm-subs"
 path = "src/main.rs"
 
-[features]
-default = ["tray"]
-# System tray icon. On Linux this pulls in GTK 3 and libayatana-appindicator;
-# build with `--no-default-features` on a machine without their dev packages.
-tray = ["dep:tray-icon", "dep:gtk"]
-
 [dependencies]
 # Desktop shell
 eframe = { version = "0.36", default-features = false, features = ["glow", "default_fonts", "wayland", "x11", "accesskit"] }
 # Same version eframe uses; for window settings eframe does not get right across monitors
 # and for choosing the X11 backend on Linux.
 winit = { version = "0.30", default-features = false, features = ["x11"] }
-tray-icon = { version = "0.25", optional = true }
+# On Linux the tray speaks the StatusNotifierItem D-Bus protocol itself, so the binary
+# needs no GTK, libappindicator or libxdo.
+tray-icon = { version = "0.25", default-features = false, features = ["ksni"] }
 rfd = { version = "0.17", default-features = false, features = ["xdg-portal"] }
 auto-launch = "0.6"
 open = "5.4"
@@ -83,9 +79,6 @@ sys-locale = "0.3"
 chardetng = "1.0"
 # The encodings chardetng returns; this dependency enables their `decode`.
 encoding_rs = "0.8"
-
-[target.'cfg(target_os = "linux")'.dependencies]
-gtk = { version = "0.18", optional = true }
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61", features = [

@@ -56,9 +56,7 @@ To build it yourself, use Rust 1.95 or newer:
 cargo build --release
 ```
 
-Then run `target/release/llm-subs`. On Linux the tray icon needs
-`libgtk-3-dev libayatana-appindicator3-dev libxdo-dev`; build with
-`--no-default-features` to skip the tray.
+Then run `target/release/llm-subs`.
 
 The first start opens a short guide: press *Continue with ChatGPT* (or use an API key or a
 local server) and pick the language to translate into. Then add a watched folder, or just
