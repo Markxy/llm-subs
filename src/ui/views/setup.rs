@@ -148,7 +148,7 @@ fn show_ffmpeg(app: &mut LlmSubsApp, ui: &mut Ui) {
                 }
                 DownloadStatus::Idle | DownloadStatus::Finished => {
                     let label = if matches!(app.runtime().ffmpeg_status(), FfmpegStatus::Missing) { "Download FFmpeg for LLM Subs" } else { "Download a fresh managed build" };
-                    if ui.button(label).on_hover_text("Static builds from BtbN (Windows), johnvansickle.com (Linux) and evermeet.cx (macOS), stored in the LLM Subs data folder.").clicked() {
+                    if ui.button(label).on_hover_text("Static builds from the Shaka project (BtbN on Windows on Arm), stored in the LLM Subs data folder.").clicked() {
                         app.runtime().start_ffmpeg_download();
                     }
                     if ui.button("Re-detect").clicked() {

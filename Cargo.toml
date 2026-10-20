@@ -60,8 +60,6 @@ uuid = { version = "1.26", features = ["v4"] }
 
 # Archive handling for the managed FFmpeg download
 zip = { version = "8.6", default-features = false, features = ["deflate"] }
-tar = "0.4"
-lzma-rs = "0.3"
 tempfile = "3.27"
 
 # Diagnostics and CLI
