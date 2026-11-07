@@ -100,6 +100,13 @@ windows-sys = { version = "0.61", features = [
     "Win32_System_Registry", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging",
 ] }
 raw-window-handle = "0.6"
+# Already built for eframe; windows-sys has no way to implement the file dialog's callbacks.
+windows = { version = "0.62", features = [
+    "Win32_System_Com", "Win32_System_Ole", "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_UI_Shell", "Win32_UI_Shell_Common", "Win32_UI_WindowsAndMessaging",
+] }
+# The `implement` macro from `windows` refers to this crate by name.
+windows-core = "0.62"
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"

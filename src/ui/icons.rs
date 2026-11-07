@@ -24,6 +24,7 @@ pub const DOWNLOAD: &str = "\u{f30a}";
 pub const EXCLAMATION_TRIANGLE: &str = "\u{f33b}";
 pub const EYE: &str = "\u{f341}";
 pub const EYE_SLASH: &str = "\u{f340}";
+#[cfg_attr(windows, allow(dead_code))] // only in the Add menu of the other systems
 pub const FILE_EARMARK: &str = "\u{f392}";
 pub const FOLDER: &str = "\u{f3d7}";
 pub const FOLDER2_OPEN: &str = "\u{f3d8}";

@@ -14,16 +14,7 @@ pub fn show(app: &mut LlmSubsApp, ui: &mut Ui) {
     widgets::trailing_row(
         ui,
         |ui| {
-            if ui.button(labeled(icons::FOLDER, "Add folder…")).clicked()
-                && let Some(folder) = widgets::pick_folder()
-            {
-                app.queue_paths(vec![folder], false);
-            }
-            if ui.button(labeled(icons::FILE_EARMARK, "Add files…")).clicked() {
-                let watch = &app.draft.watch;
-                let files = widgets::pick_media_files(&watch.media_extensions, &watch.subtitle_extensions);
-                app.queue_paths(files, false);
-            }
+            add_button(app, ui);
             let watching_paused = app.runtime().is_watch_paused();
             if ui.selectable_label(watching_paused, if watching_paused { labeled(icons::EYE_SLASH, "Watching paused") } else { labeled(icons::EYE, "Pause watching") }).clicked() {
                 app.runtime().set_watch_paused(!watching_paused);
@@ -86,6 +77,34 @@ pub fn show(app: &mut LlmSubsApp, ui: &mut Ui) {
         }
     }
     app.jobs_cache = records;
+}
+
+#[cfg(windows)]
+fn add_button(app: &mut LlmSubsApp, ui: &mut Ui) {
+    if ui.button(labeled(icons::PLUS_LG, "Add")).on_hover_text("Choose files or folders to translate").clicked() {
+        let watch = &app.draft.watch;
+        let extensions: Vec<String> = watch.media_extensions.iter().chain(&watch.subtitle_extensions).cloned().collect();
+        app.queue_paths(crate::platform::pick_files_and_folders(&extensions), false);
+    }
+}
+
+/// A menu here: the dialogs on these systems choose either files or a folder, not both.
+#[cfg(not(windows))]
+fn add_button(app: &mut LlmSubsApp, ui: &mut Ui) {
+    ui.menu_button(labeled(icons::PLUS_LG, "Add"), |ui| {
+        if ui.button(labeled(icons::FILE_EARMARK, "Files…")).clicked() {
+            ui.close();
+            let watch = &app.draft.watch;
+            let files = widgets::pick_media_files(&watch.media_extensions, &watch.subtitle_extensions);
+            app.queue_paths(files, false);
+        }
+        if ui.button(labeled(icons::FOLDER, "Folder…")).clicked() {
+            ui.close();
+            if let Some(folder) = widgets::pick_folder() {
+                app.queue_paths(vec![folder], false);
+            }
+        }
+    });
 }
 
 /// A shape for each status, so telling them apart does not depend on seeing the colours.
