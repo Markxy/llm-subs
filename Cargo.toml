@@ -83,6 +83,13 @@ chardetng = "1.0"
 # The encodings chardetng returns; this dependency enables their `decode`.
 encoding_rs = "0.8"
 
+[build-dependencies]
+# Puts the icon in the Windows executable, for pinned shortcuts and Explorer.
+embed-resource = "3"
+# What src/ui/icon.rs needs, which build.rs uses to draw that icon.
+png = "0.18"
+anyhow = "1.0"
+
 [target.'cfg(target_os = "linux")'.dependencies]
 gtk = { version = "0.18", optional = true }
 
