@@ -3,6 +3,7 @@ use eframe::egui::{self, RichText, Ui};
 
 use crate::config::ProviderKind;
 use crate::llm::{format_token_count, format_usd, ModelUsage, UsageSummary};
+use crate::ui::icons::{self, labeled};
 use crate::ui::{theme, widgets, LlmSubsApp};
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -84,7 +85,7 @@ which only ChatGPT can show; on Plus the five-hour limit is shared with every ot
     ui.horizontal(|ui| {
         widgets::hint(ui, "Costs use list prices, or the price you set for a model under Models.");
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            ui.menu_button("Reset…", |ui| {
+            ui.menu_button(labeled(icons::TRASH, "Reset…"), |ui| {
                 if ui.button("Delete all usage statistics").clicked() {
                     if let Err(error) = app.runtime().llm().usage.clear() {
                         app.toast(format!("Could not reset the statistics: {error:#}"));

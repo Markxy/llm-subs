@@ -2,11 +2,15 @@
 
 mod autostart;
 mod console;
+#[cfg(windows)]
+mod file_dialog;
 pub mod notifications;
 mod window_scaling;
 
 pub use autostart::{is_run_on_startup_enabled, set_run_on_startup, HIDDEN_START_FLAG};
 pub use console::attach_parent_console;
+#[cfg(windows)]
+pub use file_dialog::pick_files_and_folders;
 pub use window_scaling::follow_suggested_rect_on_scale_change;
 
 use std::path::Path;

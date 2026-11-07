@@ -83,6 +83,13 @@ chardetng = "1.0"
 # The encodings chardetng returns; this dependency enables their `decode`.
 encoding_rs = "0.8"
 
+[build-dependencies]
+# Puts the icon in the Windows executable, for pinned shortcuts and Explorer.
+embed-resource = "3"
+# What src/ui/icon.rs needs, which build.rs uses to draw that icon.
+png = "0.18"
+anyhow = "1.0"
+
 [target.'cfg(target_os = "linux")'.dependencies]
 gtk = { version = "0.18", optional = true }
 
@@ -93,6 +100,13 @@ windows-sys = { version = "0.61", features = [
     "Win32_System_Registry", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging",
 ] }
 raw-window-handle = "0.6"
+# Already built for eframe; windows-sys has no way to implement the file dialog's callbacks.
+windows = { version = "0.62", features = [
+    "Win32_System_Com", "Win32_System_Ole", "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_UI_Shell", "Win32_UI_Shell_Common", "Win32_UI_WindowsAndMessaging",
+] }
+# The `implement` macro from `windows` refers to this crate by name.
+windows-core = "0.62"
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"

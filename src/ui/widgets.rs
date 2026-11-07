@@ -218,6 +218,7 @@ pub fn pick_folder() -> Option<PathBuf> {
     rfd::FileDialog::new().set_title("Choose a folder").pick_folder()
 }
 
+#[cfg(not(windows))]
 pub fn pick_media_files(media_extensions: &[String], subtitle_extensions: &[String]) -> Vec<PathBuf> {
     let media: Vec<&str> = media_extensions.iter().map(String::as_str).collect();
     let subtitles: Vec<&str> = subtitle_extensions.iter().map(String::as_str).collect();

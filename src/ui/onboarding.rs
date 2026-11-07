@@ -9,6 +9,7 @@ use crate::llm::chatgpt::{ModelCatalog, SignInProgress, DEFAULT_MODEL};
 
 use super::views::models::{chatgpt_button, manage_usage_link};
 use super::views::setup::download_progress_bar;
+use super::icons::{self, labeled};
 use super::{theme, widgets, LlmSubsApp};
 
 const WIDTH: f32 = 470.0;
@@ -186,7 +187,7 @@ fn chatgpt_panel(app: &mut LlmSubsApp, ui: &mut Ui) -> Option<String> {
                     ui.ctx().copy_text(authorize_url.clone());
                 }
             }
-            if ui.small_button("Cancel").clicked() {
+            if ui.small_button(labeled(icons::X_LG, "Cancel")).clicked() {
                 runtime.chatgpt_cancel_sign_in(name);
             }
         });
@@ -410,7 +411,7 @@ fn ffmpeg_status(app: &LlmSubsApp, ui: &mut Ui) {
             ui.horizontal(|ui| {
                 widgets::status_dot(ui, palette.danger);
                 ui.label(RichText::new("FFmpeg could not be downloaded").small());
-                if ui.small_button("Retry").clicked() {
+                if ui.small_button(labeled(icons::ARROW_CLOCKWISE, "Retry")).clicked() {
                     runtime.start_ffmpeg_download();
                 }
             });
@@ -425,7 +426,7 @@ fn ffmpeg_status(app: &LlmSubsApp, ui: &mut Ui) {
             FfmpegStatus::Missing => {
                 widgets::status_dot(ui, palette.danger);
                 ui.label(RichText::new("FFmpeg not found").small().color(palette.muted));
-                if ui.small_button("Download").clicked() {
+                if ui.small_button(labeled(icons::DOWNLOAD, "Download")).clicked() {
                     runtime.start_ffmpeg_download();
                 }
             }

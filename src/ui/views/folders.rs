@@ -1,6 +1,7 @@
 use eframe::egui::{RichText, Ui};
 
 use crate::config::WatchedFolder;
+use crate::ui::icons::{self, labeled};
 use crate::ui::{theme, widgets, LlmSubsApp};
 
 pub fn show(app: &mut LlmSubsApp, ui: &mut Ui) {
@@ -20,14 +21,14 @@ pub fn show(app: &mut LlmSubsApp, ui: &mut Ui) {
             widgets::trailing_row(
                 ui,
                 |ui| {
-                    if ui.small_button("Remove").clicked() {
+                    if ui.small_button(labeled(icons::TRASH, "Remove")).clicked() {
                         remove_index = Some(index);
                     }
                     if !folder.path.is_dir() {
-                        widgets::status_chip(ui, "not found", palette.warning);
+                        widgets::status_chip(ui, &labeled(icons::EXCLAMATION_TRIANGLE, "not found"), palette.warning);
                     }
                 },
-                |ui| widgets::truncated(ui, RichText::new(folder.path.display().to_string()).strong()),
+                |ui| widgets::truncated(ui, RichText::new(labeled(icons::FOLDER, &folder.path.display().to_string())).strong()),
             );
             ui.horizontal(|ui| {
                 let mut changed = ui.checkbox(&mut folder.recursive, "Include subfolders").changed();
@@ -48,7 +49,7 @@ pub fn show(app: &mut LlmSubsApp, ui: &mut Ui) {
         app.mark_dirty();
     }
 
-    if ui.button("Add folder…").clicked()
+    if ui.button(labeled(icons::PLUS_LG, "Add folder…")).clicked()
         && let Some(path) = widgets::pick_folder()
     {
         if app.draft.watch.folders.iter().any(|f| f.path == path) {

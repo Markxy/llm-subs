@@ -7,6 +7,7 @@ use crate::app::{AppRuntime, ChatGptSignIn, ProviderTestState};
 use crate::config::{ModelPricing, ModelSelection, ProviderKind, ProviderProfile};
 use crate::llm::chatgpt::{ModelCatalog, SignInProgress, DEFAULT_MODEL};
 use crate::llm::{builtin_price, format_token_count, format_usd};
+use crate::ui::icons::{self, labeled};
 use crate::ui::{theme, widgets, LlmSubsApp};
 
 pub fn show(app: &mut LlmSubsApp, ui: &mut Ui) {
@@ -114,7 +115,7 @@ fn chatgpt_model_rows(
         }
         if view.models == ModelCatalog::Loading {
             ui.spinner();
-        } else if ui.small_button("Refresh list").clicked() {
+        } else if ui.small_button(labeled(icons::ARROW_CLOCKWISE, "Refresh list")).clicked() {
             runtime.chatgpt_load_models(&provider.name);
         }
     });
@@ -276,7 +277,7 @@ fn show_providers(app: &mut LlmSubsApp, ui: &mut Ui) {
                 |ui| {
                     let in_use = translation_model.provider == provider.name;
                     if ui
-                        .add_enabled(!in_use, egui::Button::new("Remove").small())
+                        .add_enabled(!in_use, egui::Button::new(labeled(icons::TRASH, "Remove")).small())
                         .on_disabled_hover_text("This provider translates; choose another one above first.")
                         .clicked()
                     {
@@ -321,7 +322,7 @@ fn show_providers(app: &mut LlmSubsApp, ui: &mut Ui) {
                 let mut test_model = ui.data_mut(|d| d.get_temp::<String>(id)).unwrap_or(default_model);
                 ui.add(egui::TextEdit::singleline(&mut test_model).desired_width(widgets::field_width(ui, 220.0, 140.0)).hint_text("model to test with"));
                 ui.data_mut(|d| d.insert_temp(id, test_model.clone()));
-                if ui.button("Test connection").clicked() {
+                if ui.button(labeled(icons::PLUG, "Test connection")).clicked() {
                     let effort = if is_translator && test_model == translation_model.model { translation_model.effort.clone() } else { None };
                     test_request = Some((provider.clone(), test_model, effort));
                 }
@@ -331,11 +332,11 @@ fn show_providers(app: &mut LlmSubsApp, ui: &mut Ui) {
                         ui.label(RichText::new("Testing…").color(palette.muted));
                     }
                     Some(ProviderTestState::Succeeded(message)) => {
-                        ui.label(RichText::new("✔").color(palette.success));
+                        ui.label(RichText::new(icons::CHECK_CIRCLE).color(palette.success));
                         ui.add(egui::Label::new(RichText::new(message).small().color(palette.success)).wrap());
                     }
                     Some(ProviderTestState::Failed(message)) => {
-                        ui.label(RichText::new("✖").color(palette.danger));
+                        ui.label(RichText::new(icons::X_CIRCLE).color(palette.danger));
                         ui.add(egui::Label::new(RichText::new(message).small().color(palette.danger)).wrap());
                     }
                     None => {}
@@ -366,7 +367,7 @@ fn show_providers(app: &mut LlmSubsApp, ui: &mut Ui) {
     }
 
     ui.horizontal(|ui| {
-        ui.menu_button("Add provider", |ui| {
+        ui.menu_button(labeled(icons::PLUS_LG, "Add provider"), |ui| {
             let choices = [
                 ("ChatGPT account (sign in with ChatGPT)", ProviderKind::ChatGpt, "chatgpt"),
                 ("OpenAI API", ProviderKind::OpenAi, "openai"),
@@ -413,7 +414,7 @@ fn chatgpt_account_panel(ui: &mut Ui, runtime: &Arc<AppRuntime>, provider: &Prov
                     ui.ctx().copy_text(authorize_url.clone());
                 }
             }
-            if ui.small_button("Cancel").clicked() {
+            if ui.small_button(labeled(icons::X_LG, "Cancel")).clicked() {
                 runtime.chatgpt_cancel_sign_in(&provider.name);
             }
         });
@@ -424,7 +425,7 @@ fn chatgpt_account_panel(ui: &mut Ui, runtime: &Arc<AppRuntime>, provider: &Prov
             widgets::trailing_row(
                 ui,
                 |ui| {
-                    if ui.small_button("Sign out").clicked() {
+                    if ui.small_button(labeled(icons::BOX_ARROW_RIGHT, "Sign out")).clicked() {
                         runtime.chatgpt_sign_out(&provider.name);
                     }
                     manage_usage_link(ui, runtime);

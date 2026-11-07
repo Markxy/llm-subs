@@ -1,4 +1,5 @@
-//! The application icon, drawn at runtime so no image assets are needed.
+//! The application icon, drawn in code so no image assets are needed. `build.rs` uses this
+//! file too, for the icon inside the Windows executable.
 
 pub struct IconImage {
     pub rgba: Vec<u8>,

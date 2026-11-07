@@ -2,6 +2,7 @@ use eframe::egui::{self, RichText, Ui};
 
 use crate::app::{DownloadStatus, FfmpegStatus};
 use crate::ffmpeg::{DownloadPhase, DownloadProgress};
+use crate::ui::icons::{self, labeled};
 use crate::ui::{theme, widgets, LlmSubsApp};
 
 pub fn show(app: &mut LlmSubsApp, ui: &mut Ui) {
@@ -50,7 +51,7 @@ pub fn show(app: &mut LlmSubsApp, ui: &mut Ui) {
                 widgets::trailing_row(
                     ui,
                     |ui| {
-                        if ui.small_button("Open").clicked()
+                        if ui.small_button(labeled(icons::FOLDER2_OPEN, "Open")).clicked()
                             && let Err(error) = crate::platform::reveal_in_folder(&path)
                         {
                             failure = Some(format!("{error:#}"));
@@ -133,7 +134,7 @@ fn show_ffmpeg(app: &mut LlmSubsApp, ui: &mut Ui) {
                 app.draft.ffmpeg.path_override = (!text.trim().is_empty()).then(|| std::path::PathBuf::from(text.trim()));
                 app.mark_dirty();
             }
-            if ui.button("Browse…").clicked()
+            if ui.button(labeled(icons::FOLDER2_OPEN, "Browse…")).clicked()
                 && let Some(folder) = widgets::pick_folder()
             {
                 app.draft.ffmpeg.path_override = Some(folder);
@@ -144,17 +145,17 @@ fn show_ffmpeg(app: &mut LlmSubsApp, ui: &mut Ui) {
             match app.runtime().download_status() {
                 DownloadStatus::Running(progress) => download_progress_bar(ui, &progress, 300.0),
                 DownloadStatus::Failed(error) => {
-                    if ui.button("Retry download").clicked() {
+                    if ui.button(labeled(icons::ARROW_CLOCKWISE, "Retry download")).clicked() {
                         app.runtime().start_ffmpeg_download();
                     }
                     ui.add(egui::Label::new(RichText::new(error).small().color(palette.danger)).wrap());
                 }
                 DownloadStatus::Idle | DownloadStatus::Finished => {
                     let label = if matches!(app.runtime().ffmpeg_status(), FfmpegStatus::Missing) { "Download FFmpeg for LLM Subs" } else { "Download a fresh managed build" };
-                    if ui.button(label).on_hover_text("Static builds from BtbN (Windows), johnvansickle.com (Linux) and evermeet.cx (macOS), stored in the LLM Subs data folder.").clicked() {
+                    if ui.button(labeled(icons::DOWNLOAD, label)).on_hover_text("Static builds from BtbN (Windows), johnvansickle.com (Linux) and evermeet.cx (macOS), stored in the LLM Subs data folder.").clicked() {
                         app.runtime().start_ffmpeg_download();
                     }
-                    if ui.button("Re-detect").clicked() {
+                    if ui.button(labeled(icons::SEARCH, "Re-detect")).clicked() {
                         app.runtime().refresh_ffmpeg();
                     }
                 }

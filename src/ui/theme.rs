@@ -47,6 +47,7 @@ pub fn palette(ctx: &egui::Context) -> Palette {
 }
 
 pub fn apply(ctx: &egui::Context) {
+    super::icons::install(ctx);
     ctx.set_visuals_of(egui::Theme::Dark, styled_visuals(egui::Visuals::dark(), &DARK));
     ctx.set_visuals_of(egui::Theme::Light, styled_visuals(egui::Visuals::light(), &LIGHT));
     ctx.style_mut_of(egui::Theme::Dark, style_spacing);

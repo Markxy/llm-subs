@@ -97,4 +97,5 @@ stored in plain text there, so use an environment variable instead if you share 
 
 ## License
 
-MIT. FFmpeg is used as an external program and is licensed separately.
+MIT. FFmpeg is used as an external program and is licensed separately. The icons come from
+[Bootstrap Icons](https://icons.getbootstrap.com), also MIT (see [`assets`](assets)).

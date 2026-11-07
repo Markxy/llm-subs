@@ -5,6 +5,7 @@ use crate::jobs::{JobRecord, JobStatus, LogLevel};
 use crate::llm::chatgpt::MANAGE_USAGE_URL;
 use crate::llm::{format_token_count, Cost};
 use crate::watch::PendingFile;
+use crate::ui::icons::{self, labeled};
 use crate::ui::views::View;
 use crate::ui::{theme, widgets, LlmSubsApp};
 
@@ -13,23 +14,14 @@ pub fn show(app: &mut LlmSubsApp, ui: &mut Ui) {
     widgets::trailing_row(
         ui,
         |ui| {
-            if ui.button("Add folder…").clicked()
-                && let Some(folder) = widgets::pick_folder()
-            {
-                app.queue_paths(vec![folder], false);
-            }
-            if ui.button("Add files…").clicked() {
-                let watch = &app.draft.watch;
-                let files = widgets::pick_media_files(&watch.media_extensions, &watch.subtitle_extensions);
-                app.queue_paths(files, false);
-            }
+            add_button(app, ui);
             let watching_paused = app.runtime().is_watch_paused();
-            if ui.selectable_label(watching_paused, if watching_paused { "Watching paused" } else { "Pause watching" }).clicked() {
+            if ui.selectable_label(watching_paused, if watching_paused { labeled(icons::EYE_SLASH, "Watching paused") } else { labeled(icons::EYE, "Pause watching") }).clicked() {
                 app.runtime().set_watch_paused(!watching_paused);
             }
             let translations_paused = app.runtime().jobs().is_paused();
             let label = if translations_paused { "Translations paused" } else { "Pause translations" };
-            if ui.selectable_label(translations_paused, label).on_hover_text("Running jobs go back to the queue and start over on resume").clicked() {
+            if ui.selectable_label(translations_paused, labeled(icons::PAUSE_CIRCLE, label)).on_hover_text("Running jobs go back to the queue and start over on resume").clicked() {
                 app.runtime().jobs().set_paused(!translations_paused);
             }
         },
@@ -48,6 +40,7 @@ pub fn show(app: &mut LlmSubsApp, ui: &mut Ui) {
         theme::card(ui).show(ui, |ui| {
             ui.vertical_centered(|ui| {
                 ui.add_space(24.0);
+                ui.label(RichText::new(icons::INBOX).size(36.0).color(palette.muted));
                 ui.label(RichText::new("Nothing here yet").size(17.0).strong());
                 ui.label(RichText::new("Add a watched folder, or drop a video here to translate its subtitles.").color(palette.muted));
                 ui.add_space(24.0);
@@ -73,7 +66,7 @@ pub fn show(app: &mut LlmSubsApp, ui: &mut Ui) {
         ui.horizontal(|ui| {
             widgets::section_title(ui, "History");
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if ui.small_button("Clear history").clicked() {
+                if ui.small_button(labeled(icons::TRASH, "Clear history")).clicked() {
                     app.runtime().jobs().clear_history();
                     app.selected_job = None;
                 }
@@ -86,11 +79,52 @@ pub fn show(app: &mut LlmSubsApp, ui: &mut Ui) {
     app.jobs_cache = records;
 }
 
+#[cfg(windows)]
+fn add_button(app: &mut LlmSubsApp, ui: &mut Ui) {
+    if ui.button(labeled(icons::PLUS_LG, "Add")).on_hover_text("Choose files or folders to translate").clicked() {
+        let watch = &app.draft.watch;
+        let extensions: Vec<String> = watch.media_extensions.iter().chain(&watch.subtitle_extensions).cloned().collect();
+        app.queue_paths(crate::platform::pick_files_and_folders(&extensions), false);
+    }
+}
+
+/// A menu here: the dialogs on these systems choose either files or a folder, not both.
+#[cfg(not(windows))]
+fn add_button(app: &mut LlmSubsApp, ui: &mut Ui) {
+    ui.menu_button(labeled(icons::PLUS_LG, "Add"), |ui| {
+        if ui.button(labeled(icons::FILE_EARMARK, "Files…")).clicked() {
+            ui.close();
+            let watch = &app.draft.watch;
+            let files = widgets::pick_media_files(&watch.media_extensions, &watch.subtitle_extensions);
+            app.queue_paths(files, false);
+        }
+        if ui.button(labeled(icons::FOLDER, "Folder…")).clicked() {
+            ui.close();
+            if let Some(folder) = widgets::pick_folder() {
+                app.queue_paths(vec![folder], false);
+            }
+        }
+    });
+}
+
+/// A shape for each status, so telling them apart does not depend on seeing the colours.
+fn status_icon(status: &JobStatus) -> &'static str {
+    match status {
+        JobStatus::Queued => icons::CLOCK,
+        JobStatus::Running => icons::ARROW_REPEAT,
+        JobStatus::Succeeded => icons::CHECK_CIRCLE,
+        JobStatus::Skipped { .. } => icons::DASH_CIRCLE,
+        JobStatus::Failed { .. } => icons::X_CIRCLE,
+        JobStatus::Cancelled => icons::SLASH_CIRCLE,
+    }
+}
+
 fn show_banners(app: &mut LlmSubsApp, ui: &mut Ui) {
     let palette = theme::palette(ui.ctx());
     if app.runtime().jobs().is_paused() {
         theme::banner(ui, palette.warning).show(ui, |ui| {
             ui.horizontal_wrapped(|ui| {
+                ui.label(RichText::new(icons::PAUSE_CIRCLE).color(palette.warning));
                 ui.label(RichText::new("Translations are paused.").strong());
                 ui.label("New files still join the queue and start once you resume.");
                 if ui.link("Resume").clicked() {
@@ -103,7 +137,7 @@ fn show_banners(app: &mut LlmSubsApp, ui: &mut Ui) {
     if matches!(app.runtime().ffmpeg_status(), FfmpegStatus::Missing) {
         theme::banner(ui, palette.warning).show(ui, |ui| {
             ui.horizontal_wrapped(|ui| {
-                ui.label(RichText::new("⚠").color(palette.warning));
+                ui.label(RichText::new(icons::EXCLAMATION_TRIANGLE).color(palette.warning));
                 ui.label("FFmpeg was not found. Media files cannot be inspected until it is installed or downloaded.");
                 if ui.link("Open Setup").clicked() {
                     app.switch_view(View::Setup);
@@ -116,7 +150,7 @@ fn show_banners(app: &mut LlmSubsApp, ui: &mut Ui) {
     if !problems.is_empty() {
         theme::banner(ui, palette.warning).show(ui, |ui| {
             ui.horizontal_wrapped(|ui| {
-                ui.label(RichText::new("⚠").color(palette.warning));
+                ui.label(RichText::new(icons::EXCLAMATION_TRIANGLE).color(palette.warning));
                 ui.label(RichText::new("Translation is not configured yet:").strong());
                 ui.label(problems.join(" "));
                 if ui.link("Configure models").clicked() {
@@ -145,7 +179,7 @@ fn waiting_files(ui: &mut Ui, pending: &[PendingFile]) {
                     ui.label(RichText::new(widgets::format_duration(chrono::Utc::now() - file.since)).color(palette.muted));
                 },
                 |ui| {
-                    widgets::status_chip(ui, "Waiting", palette.muted);
+                    widgets::status_chip(ui, &labeled(icons::CLOCK, "Waiting"), palette.muted);
                     widgets::truncated(ui, RichText::new(name).strong())
                 },
             );
@@ -164,10 +198,10 @@ fn active_job_card(app: &mut LlmSubsApp, ui: &mut Ui, record: &JobRecord) {
         widgets::trailing_row(
             ui,
             |ui| {
-                if ui.button("Cancel").clicked() {
+                if ui.button(labeled(icons::X_LG, "Cancel")).clicked() {
                     app.runtime().jobs().cancel(&record.id);
                 }
-                widgets::status_chip(ui, record.status.label(), palette.accent);
+                widgets::status_chip(ui, &labeled(status_icon(&record.status), record.status.label()), palette.accent);
             },
             |ui| widgets::truncated(ui, RichText::new(record.input.file_name()).strong().size(15.0)),
         );
@@ -184,7 +218,7 @@ fn active_job_card(app: &mut LlmSubsApp, ui: &mut Ui, record: &JobRecord) {
             |ui| widgets::truncated(ui, RichText::new(format!("{} · {}", record.stage.label(), record.activity)).color(palette.muted)),
         );
         let selected = app.selected_job.as_deref() == Some(record.id.as_str());
-        if ui.small_button(if selected { "Hide log" } else { "Show log" }).clicked() {
+        if ui.small_button(if selected { labeled(icons::CHEVRON_UP, "Hide log") } else { labeled(icons::CHEVRON_DOWN, "Show log") }).clicked() {
             app.selected_job = if selected { None } else { Some(record.id.clone()) };
         }
         if selected {
@@ -234,7 +268,7 @@ fn history_row(app: &mut LlmSubsApp, ui: &mut Ui, record: &JobRecord) {
                     }
                 },
                 |ui| {
-                    widgets::status_chip(ui, record.status.label(), chip_color);
+                    widgets::status_chip(ui, &labeled(status_icon(&record.status), record.status.label()), chip_color);
                     ui.vertical(|ui| {
                         widgets::truncated(ui, RichText::new(record.input.file_name()).strong());
                         // An error can be long: one line while collapsed, all of it when opened.
@@ -262,21 +296,21 @@ fn history_row(app: &mut LlmSubsApp, ui: &mut Ui, record: &JobRecord) {
                 ui.horizontal(|ui| {
                     if let Some(output) = &record.output_path
                         && output.exists()
-                        && ui.small_button("Show output").clicked()
+                        && ui.small_button(labeled(icons::FOLDER2_OPEN, "Show output")).clicked()
                         && let Err(error) = crate::platform::reveal_in_folder(output)
                     {
                         app.toast(format!("{error:#}"));
                     }
                     if hit_chatgpt_limit
-                        && ui.small_button("Manage ChatGPT usage").clicked()
+                        && ui.small_button(labeled(icons::BOX_ARROW_UP_RIGHT, "Manage ChatGPT usage")).clicked()
                         && let Err(error) = app.runtime().open_chatgpt_usage_page()
                     {
                         app.toast(format!("{error:#}"));
                     }
-                    if ui.small_button("Translate again").clicked() {
+                    if ui.small_button(labeled(icons::ARROW_REPEAT, "Translate again")).clicked() {
                         app.queue_paths(vec![record.input.path().to_path_buf()], true);
                     }
-                    if ui.small_button("Remove").clicked() {
+                    if ui.small_button(labeled(icons::TRASH, "Remove")).clicked() {
                         app.runtime().jobs().remove_from_history(&record.id);
                         app.selected_job = None;
                     }
