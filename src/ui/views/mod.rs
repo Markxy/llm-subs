@@ -5,6 +5,8 @@ pub mod setup;
 pub mod translation;
 pub mod usage;
 
+use super::icons;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum View {
     Jobs,
@@ -17,6 +19,17 @@ pub enum View {
 
 impl View {
     pub const ALL: [View; 6] = [View::Jobs, View::Folders, View::Translation, View::Models, View::Usage, View::Setup];
+
+    pub fn icon(self) -> &'static str {
+        match self {
+            View::Jobs => icons::LIST_TASK,
+            View::Folders => icons::FOLDER,
+            View::Translation => icons::TRANSLATE,
+            View::Models => icons::CPU,
+            View::Usage => icons::BAR_CHART,
+            View::Setup => icons::GEAR,
+        }
+    }
 
     pub fn label(self) -> &'static str {
         match self {

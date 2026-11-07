@@ -2,6 +2,7 @@
 //! edits a draft of the configuration, shows job records and forwards actions.
 
 mod icon;
+pub(crate) mod icons;
 mod notifications;
 mod onboarding;
 mod theme;
@@ -266,6 +267,7 @@ impl LlmSubsApp {
         let painter = ctx.layer_painter(egui::LayerId::new(egui::Order::Foreground, egui::Id::new("drop-overlay")));
         painter.rect_filled(screen, 0.0, palette.accent.gamma_multiply(0.18));
         painter.rect_stroke(screen.shrink(12.0), 12.0, egui::Stroke::new(2.0, palette.accent), egui::StrokeKind::Inside);
+        painter.text(screen.center() - egui::vec2(0.0, 34.0), egui::Align2::CENTER_CENTER, icons::DOWNLOAD, egui::FontId::proportional(44.0), palette.accent);
         painter.text(
             screen.center(),
             egui::Align2::CENTER_CENTER,
@@ -343,8 +345,9 @@ impl LlmSubsApp {
 
                 for view in View::ALL {
                     let selected = self.view == view;
-                    let text = egui::RichText::new(view.label()).size(15.0);
-                    let response = ui.add_sized([ui.available_width(), 32.0], egui::Button::selectable(selected, text));
+                    let text = egui::RichText::new(icons::labeled(view.icon(), view.label())).size(15.0);
+                    // Left-aligned so the icons form a column; the empty atom takes the spare width.
+                    let response = ui.add(egui::Button::selectable(selected, (text, egui::Atom::grow())).min_size(egui::vec2(ui.available_width(), 32.0)));
                     if response.clicked() {
                         self.view = view;
                     }
